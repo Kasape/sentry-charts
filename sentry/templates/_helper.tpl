@@ -342,33 +342,46 @@ default
 {{- end -}}
 
 {{/*
-Set ClickHouse User
+Set ClickHouse Credentials
+Credentials always map[string]interface in json format.
+When clickhouse is not enabled or clickhouse.users is not enabled, it expects specified username and password for externalClickhouse
+In case username is specified by existingSecret and existingSecretNameKey, map contains keys 'existingSecret' and 'existingSecretNameKey' containing given values. 
+In case username is specified as plaintext in user.name, map contains key "name" with plaintext username.
+In case username is not specified at all, map contains key "name" with "default" value.
+In case password is specified by existingSecret and existingSecretPasswordKey, map contains keys 'existingSecret' and 'existingSecretPasswordKey' containing given values. 
+In case password is specified as plaintext in user.config.password, map contains key "password" with plaintext username.
+In case password is not specified at all, map contains key "password" with empty string.
 */}}
-{{- define "sentry.clickhouse.username" -}}
-{{- if .Values.clickhouse.enabled -}}
-  {{- if .Values.clickhouse.clickhouse.configmap.users.enabled -}}
-{{ (index .Values.clickhouse.clickhouse.configmap.users.user 0).name }}
-  {{- else -}}
-default
-  {{- end -}}
-{{- else -}}
-{{ required "A valid .Values.externalClickhouse.username is required" .Values.externalClickhouse.username }}
-{{- end -}}
-{{- end -}}
+{{- define "sentry.clickhouse.credentials" -}}
+  {{ $credsDict := dict }}
+  {{- if .Values.clickhouse.enabled -}}
+    {{- if .Values.clickhouse.clickhouse.configmap.users.enabled -}}
+      {{ $user := (index .Values.clickhouse.clickhouse.configmap.users.user 0) }}
+      {{- if and (hasKey $user "existingSecret") (hasKey $user "existingSecretNameKey") }}
+        {{ $_ := set $credsDict "existingSecret" $user.existingSecret }}
+        {{ $_ := set $credsDict "existingSecretNameKey" $user.existingSecretNameKey }}
+      {{- else if hasKey $user "name" }}
+        {{ $_ := set $credsDict "name" $user.name }}
+      {{- else }}
+        {{ $_ := set $credsDict "name" "default" }}
+      {{- end }}
 
-{{/*
-Set ClickHouse Password
-*/}}
-{{- define "sentry.clickhouse.password" -}}
-{{- if .Values.clickhouse.enabled -}}
-  {{- if .Values.clickhouse.clickhouse.configmap.users.enabled -}}
-{{ (index .Values.clickhouse.clickhouse.configmap.users.user 0).config.password }}
+      {{- if and (hasKey $user "existingSecret") (hasKey $user "existingSecretPasswordKey") }}
+        {{ $_ := set $credsDict "existingSecret" $user.existingSecret }}
+        {{ $_ := set $credsDict "existingSecretPasswordKey" $user.existingSecretPasswordKey }}
+      {{- else if hasKey $user.config "password" }}
+        {{ $_ := set $credsDict "password" $user.config.password }}
+      {{- else }}
+        {{ $_ := set $credsDict "password" "" }}
+      {{- end }}
+    {{- end -}}
   {{- else -}}
+    {{ $username := required "A valid .Values.externalClickhouse.username is required" .Values.externalClickhouse.username }}
+    {{ $_ := set $credsDict "name" $username }}
+    {{ $_ := set $credsDict "password" .Values.externalClickhouse.password }}
   {{- end -}}
-{{- else -}}
-{{ .Values.externalClickhouse.password }}
-{{- end -}}
-{{- end -}}
+  {{ toJson $credsDict }}
+{{- end }}
 
 {{/*
 Set ClickHouse cluster name
@@ -436,6 +449,21 @@ Common Snuba environment variables
   value: /etc/snuba/settings.py
 - name: DEFAULT_BROKERS
   value: {{ include "sentry.kafka.bootstrap_servers_string" . | quote }}
+{{ $credentials := include "sentry.clickhouse.credentials" . | fromJson }}
+{{- if hasKey $credentials "existingSecretNameKey" }}
+- name: CLICKHOUSE_USER
+  valueFrom:
+    secretKeyRef:
+      name: {{ $credentials.existingSecret }}
+      key: {{ $credentials.existingSecretNameKey }}
+{{- end }}
+{{- if hasKey $credentials "existingSecretPasswordKey" }}
+- name: CLICKHOUSE_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $credentials.existingSecret }}
+      key: {{ $credentials.existingSecretPasswordKey }}
+{{- end }}
 {{- if .Values.externalClickhouse.existingSecret }}
 - name: CLICKHOUSE_PASSWORD
   valueFrom:
