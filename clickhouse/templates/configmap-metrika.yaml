@@ -22,6 +22,9 @@ data:
                 <host>{{ .host }}</host>
                 {{- end }}
                 <port>{{ .port }}</port>
+                {{- if .secure }}
+                <secure>{{ .secure }}</secure>
+                {{- end }}
             </node>
             {{- end }}
             {{- end }}

@@ -11,6 +11,6 @@ keywords:
 name: clickhouse
 sources:
 - https://github.com/sentry-kubernetes/charts
-version: 3.2.2
+version: 3.2.3
 maintainers:
   - name: sentry-kubernetes

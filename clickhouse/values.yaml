@@ -291,6 +291,7 @@ clickhouse:
       - index: ""
         host: ""
         port: ""
+        secure: 0
     ##
     ## Configuration of clusters used by the Distributed table engine.
     ## The parameters host, port, and optionally user, password, secure, compression are specified for each server:
